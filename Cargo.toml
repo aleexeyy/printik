@@ -1,0 +1,19 @@
+[package]
+name = "photo_qt"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+eframe = "0.27"
+egui_extras = { version = "0.27", features = ["all_loaders"] }
+egui = "0.27"
+image = { version = "0.25", features = ["jpeg", "png"] }
+notify = "6.1"
+rfd = "0.14"
+pdfium-render = "0.8.31"
+dashmap = "5.5.3"
+libc = "0.2"
+
+[build-dependencies]
+bindgen = "0.69.1"
