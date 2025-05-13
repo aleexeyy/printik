@@ -16,4 +16,4 @@ dashmap = "5.5.3"
 libc = "0.2"
 
 [build-dependencies]
-bindgen = "0.69.1"
+bindgen = "0.71.0"

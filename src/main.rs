@@ -24,10 +24,10 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-mod cups_bindings;
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
 use std::mem;
-// use std::ffi::CStr;
-use cups_bindings::*;
+use std::ffi::CStr;
 
 fn main() {
     unsafe {
