@@ -27,13 +27,12 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use std::mem;
-use std::ffi::CStr;
 
 fn main() {
     unsafe {
         let mut dests: *mut cups_dest_t = mem::zeroed();
         let num_dests = cupsGetDests(&mut dests as *mut _);
-        std::slice::from_raw_parts(dests, num_dests as usize);
+        println!("{:?}", std::slice::from_raw_parts(dests, num_dests as usize));
         cupsFreeDests(num_dests, dests);
     }
 }
