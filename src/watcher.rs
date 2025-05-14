@@ -1,4 +1,4 @@
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config, EventKind, event::CreateKind};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::path::PathBuf;
@@ -33,9 +33,14 @@ impl FolderWatcher {
             for res in watcher_rx {
                 match res {
                     Ok(event) => {
-                        for path in event.paths {
-                            if let Some(path_str) = path.to_str() {
-                                tx_clone.send(path_str.to_string()).unwrap();
+                        if event.kind == EventKind::Create(CreateKind::File) {
+                            for path in event.paths {
+                                if let Some(ext) = path.extension() {
+                                    if ext == "png" || ext == "jpg" || ext == "jpeg" {
+                                        tx_clone.send(path.to_string_lossy().into_owned()).unwrap();
+                                    }
+                                
+                                }
                             }
                         }
                     }

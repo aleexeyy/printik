@@ -1,18 +1,22 @@
 use eframe::egui;
 use image::{RgbaImage, ImageReader, DynamicImage};
 use pdfium_render::prelude::*;
-use egui::{pos2, Color32, ColorImage, Rect, Vec2};
+use egui::{pos2, Color32, ColorImage, Rect, Vec2, Button, Stroke};
 use std::collections::{HashMap, VecDeque};
-use std::sync::mpsc::Receiver;
 use crate::watcher::FolderWatcher;
-use std::sync::mpsc::{self};
+use std::sync::mpsc::{self, Sender, Receiver};
 use std::path::PathBuf;
+use crate::print_job::{PdfImageInserter, InserterCommand};
+
+
+
 const MAX_CACHE_SIZE: usize = 13;
 pub const INITIAL_WIDTH: f32 = 900.0;
 pub const INITIAL_HEIGHT: f32 = 600.0;
 pub struct MyApp {
     new_images_rx: Receiver<String>,
     image_list: Vec<String>,
+    template_path: Option<String>,
     template_image: Option<egui::TextureHandle>,
     current_image_texture: Option<egui::TextureHandle>,
     current_image_path: Option<String>,
@@ -24,6 +28,7 @@ pub struct MyApp {
     cache_order: VecDeque<String>,
     current_index: usize,
     folder_watcher: FolderWatcher,
+    image_inserter : Option<Sender<InserterCommand>>,
     is_testing: bool,
     is_auto_work: bool,
 }
@@ -35,24 +40,27 @@ impl MyApp {
         Self {
             new_images_rx: rx,
             image_list: Vec::new(),
+            template_path: None,
             template_image: None,
             current_image_texture: None,
             current_image_path: None,
-            x_coordinate: "150.0".to_string(),
-            y_coordinate: "180.0".to_string(),
-            image_width: "320.0".to_string(),
+            x_coordinate: "215.0".to_string(),
+            y_coordinate: "380.0".to_string(),
+            image_width: "360.0".to_string(),
             image_height: "220.0".to_string(),
             texture_cache: HashMap::new(),
             cache_order: VecDeque::new(),
             current_index: 0,
             folder_watcher: folder_watcher,
-            is_testing: true,
+            image_inserter : None,
+            is_testing: false,
             is_auto_work: false,
         }
     }
 
     fn load_template_pdf(&mut self, ctx: &egui::Context, pdf_path: &str) {
         if let Some(image) = render_pdf_page_to_image(pdf_path, 0) {
+            self.template_path = Some(pdf_path.to_string());
             let size = [image.width() as usize, image.height() as usize];
             let pixels = image.to_vec();
             let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
@@ -104,10 +112,32 @@ impl eframe::App for MyApp {
 
         // Drain new image notifications
         while let Ok(path) = self.new_images_rx.try_recv() {
-            eprintln!("New image path received: {}", path);
+            // eprintln!("New image path received: {}", path);
             self.image_list.push(path.clone());
             self.update_cache(ctx);
             self.current_index = self.image_list.len() - 1;
+
+            println!("Image List: {:?}", self.image_list);
+
+            if self.is_auto_work {
+
+                if self.image_inserter.is_none() {
+                    let x: f32 = self.x_coordinate.parse().unwrap_or(215.0);
+                    let y: f32 = self.y_coordinate.parse().unwrap_or(380.0);
+                    let w: f32 = self.image_width.parse().unwrap_or(360.0);
+                    let h: f32 = self.image_height.parse().unwrap_or(220.0);
+                    
+                    let inserter_tx = PdfImageInserter::new_and_spawn(self.template_path.as_ref().expect("No Template is Selected").clone(), x, y, w, h);
+                    self.image_inserter = Some(inserter_tx);
+                }
+                let cmd = InserterCommand::Insert {
+                    image_path: path.clone(),
+                    output_path: "./printed_doc.pdf".to_string(),
+                };
+                if let Err(e) = self.image_inserter.as_ref().unwrap().send(cmd) {
+                    eprintln!("Failed to send print job: {}", e);
+                }
+            }
             should_repaint = true;
         }
 
@@ -128,7 +158,29 @@ impl eframe::App for MyApp {
                     }
                 }
                 if ui.button("Print").clicked() {
-                    
+                    if let (Some(temp), Some(img)) = (&self.template_path, &self.current_image_path) {
+
+                        
+
+                        if self.image_inserter.is_none() {
+                            let x: f32 = self.x_coordinate.parse().unwrap_or(215.0);
+                            let y: f32 = self.y_coordinate.parse().unwrap_or(380.0);
+                            let w: f32 = self.image_width.parse().unwrap_or(360.0);
+                            let h: f32 = self.image_height.parse().unwrap_or(220.0);
+
+                            let inserter_tx = PdfImageInserter::new_and_spawn(temp.clone(), x, y, w, h);
+                            self.image_inserter = Some(inserter_tx);
+                        }
+                        let cmd = InserterCommand::Insert {
+                            image_path: img.clone(),
+                            output_path: "./printed_doc.pdf".to_string(),
+                        };
+                        if let Err(e) = self.image_inserter.as_ref().unwrap().send(cmd) {
+                            eprintln!("Failed to send print job: {}", e);
+                        }
+                        
+                    }
+
                 }
             });
         });
@@ -202,11 +254,24 @@ impl eframe::App for MyApp {
                     ui.label("Image height");
                     should_repaint |= ui.text_edit_singleline(&mut self.image_height).changed();
 
-                    if ui.button("AutoWork").clicked() {
+                    let auto_work_button = if self.is_auto_work {
+                        Button::new("AutoWork").stroke(Stroke::new(1.5, Color32::LIGHT_BLUE))
+                    } else {
+                        Button::new("AutoWork")
+                    };
+
+                    let stop_button = if !self.is_auto_work {
+                        Button::new("Stop").stroke(Stroke::new(1.5, Color32::LIGHT_BLUE))
+                    } else {
+                        Button::new("Stop")
+                    };
+                    
+
+                    if ui.add(auto_work_button).clicked() {
                         self.is_auto_work = true;
                     }
 
-                    if ui.button("Stop").clicked() {
+                    if ui.add(stop_button).clicked() {
                         self.is_auto_work = false;
                     }
 
@@ -227,6 +292,7 @@ impl eframe::App for MyApp {
         if should_repaint {
             ctx.request_repaint();
         }
+        ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
 }
 
