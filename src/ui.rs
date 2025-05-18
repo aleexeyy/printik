@@ -1,11 +1,13 @@
 use eframe::egui;
 use image::{Rgba, ImageReader, DynamicImage, ImageBuffer, RgbaImage};
-use std::path::Path;
+use std::{
+    path::Path,
+    env,
+    sync::mpsc::{self, Sender, Receiver},
+};
 use egui::{pos2, Color32, ColorImage, Rect, Vec2, Button, Stroke};
 use std::collections::{HashMap, VecDeque};
 use crate::watcher::FolderWatcher;
-use std::sync::mpsc::{self, Sender, Receiver};
-use std::path::PathBuf;
 use crate::printer::PdfImageInserter;
 use crate::pdfwrap::{Library, BitmapFormat, PageOrientation, rendering_flags};
 
@@ -67,7 +69,7 @@ impl MyApp {
             self.template_image = Some(ctx.load_texture("template_pdf", color_image, egui::TextureOptions::default()));
         }
     }
-
+    
     fn update_cache(&mut self, ctx: &egui::Context) {
         let len = self.image_list.len();
         let start = if len >= MAX_CACHE_SIZE { len - MAX_CACHE_SIZE } else { 0 };
@@ -94,19 +96,18 @@ impl MyApp {
 
     
 }
-//TODO: implement a check for window focused or minimized and put drawing part there
-//https://github.com/emilk/egui/discussions/995
-
 impl eframe::App for MyApp {
+    
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let is_focused = ctx.input(|i| i.raw.focused);
         let mut should_repaint = false;
         if self.is_testing {
+            let current_dir = env::current_dir().unwrap();
             self.load_template_pdf(ctx, "Berlin.pdf");
-            if let Err(e) = self.folder_watcher.spawn_watcher(PathBuf::from("C:\\Users\\User\\Desktop\\photo_qt\\folder_to_monitor")) {
+            if let Err(e) = self.folder_watcher.spawn_watcher(current_dir.join("folder_to_monitor")) {
                 eprintln!("Failed to spawn watcher: {:?}", e);
             }
-            self.image_list.push("C:\\Users\\User\\Desktop\\photo_qt\\folder_to_monitor\\download.jpg".to_string());
+            self.image_list.push(current_dir.join("folder_to_monitor").join("test_image.jpeg").to_string_lossy().to_string());
             self.update_cache(ctx);
             self.is_testing = false;
             should_repaint = true;
@@ -300,7 +301,7 @@ impl eframe::App for MyApp {
         });
     }
         if should_repaint {
-            println!("Repainting!");
+            // println!("Repainting!");
             ctx.request_repaint();
         } else if !is_focused {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
@@ -313,16 +314,29 @@ fn load_image_from_path(path: &str, ctx: &egui::Context) -> Result<egui::Texture
         .map_err(|e| format!("Failed to open image: {}", e))?
         .decode()
         .map_err(|e| format!("Failed to decode image: {}", e))?;
-    let gray_dynamic: DynamicImage = img.grayscale();
+
+    let max_dim = 200u32;
+    let (orig_w, orig_h) = (img.width(), img.height());
+    let (new_w, new_h) = if orig_w > orig_h {
+        (max_dim, (orig_h * max_dim) / orig_w)
+    } else {
+        ((orig_w * max_dim) / orig_h, max_dim)
+    };
+    let resized = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+
+    let gray_dynamic: DynamicImage = resized.grayscale();
     let gray_buf = gray_dynamic.into_luma8();
     let (w, h) = gray_buf.dimensions();
     let size = [w as usize, h as usize];
     let luma_pixels = gray_buf.into_raw();
     let mut rgba_pixels = Vec::with_capacity(w as usize * h as usize * 4);
-    for &l in &luma_pixels { rgba_pixels.extend_from_slice(&[l, l, l, 255]); }
+    for &l in &luma_pixels {
+        rgba_pixels.extend_from_slice(&[l, l, l, 255]);
+    }
     let color_image = ColorImage::from_rgba_unmultiplied(size, &rgba_pixels);
     Ok(ctx.load_texture(path, color_image, egui::TextureOptions::default()))
 }
+
 
 fn render_pdf_page_to_image(pdf_path: &str) -> Option<RgbaImage> {
 

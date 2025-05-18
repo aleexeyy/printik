@@ -2,12 +2,14 @@ mod ui;
 mod watcher;
 mod printer;
 mod pdfwrap;
+
 fn main() {
     if cfg!(target_os = "macos") {
         println!("Running on MacOS");
     } else {
         println!("Running on Windows");
     }
+
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -22,4 +24,5 @@ fn main() {
             Ok(Box::new(ui::MyApp::new()))
         }),
     ).unwrap();
+
 }

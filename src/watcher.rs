@@ -2,7 +2,6 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config, EventKind};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::path::PathBuf;
-
 //TODO: Can potentialy remove this thread that runs in between, and get recv messages directly from notify internal thread
 
 pub struct FolderWatcher {
@@ -17,7 +16,7 @@ impl FolderWatcher {
             tx,
         }
     }
-
+    
     pub fn spawn_watcher(&mut self, path: PathBuf) -> notify::Result<()> {
         println!("Spawning watcher at path: {:?}", path);
         if let Some(mut w) = self.watcher.take() {
@@ -34,7 +33,6 @@ impl FolderWatcher {
             for res in watcher_rx {
                 match res {
                     Ok(event) => {
-                        println!("Event occured: {:?}", event.kind);
                         if matches!(event.kind, EventKind::Create(_)) {
 
                             for path in event.paths {
@@ -55,5 +53,6 @@ impl FolderWatcher {
 
         self.watcher = Some(watcher);
         Ok(())
+
     }
 }
