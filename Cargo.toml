@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[profile.release]
+lto = true
+
+
 [package.metadata.bundle]
 name = "PhotoQT"
 identifier = "io.github.aleexeyy.photoqtWindows"
