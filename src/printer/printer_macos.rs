@@ -3,11 +3,11 @@ mod bindings {
     #![allow(warnings)]
     include!(concat!(env!("OUT_DIR"), "/bindings_cups.rs"));
 }
-use crate::printer::temp_pdf_path;
+use std::path::PathBuf;
 
 #[cfg(target_os = "macos")]
-pub fn print_document_macos() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_path = temp_pdf_path();
+pub fn print_document_macos(save_doc_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let temp_path = save_doc_path.as_path();
         unsafe {
             let mut dests: *mut bindings::cups_dest_t = std::ptr::null_mut();
             let num_dests = bindings::cupsGetDests(&mut dests);

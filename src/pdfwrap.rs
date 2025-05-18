@@ -250,7 +250,12 @@ impl Library {
         height: i32,
         color: u64,
     ) {
-        unsafe { bindings_pdfium::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color as u32); }
+        #[cfg(target_os = "windows")]
+        let color: u32 = color as u32;
+
+        unsafe { 
+            bindings_pdfium::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color); 
+        }
     }
 
     pub fn get_bitmap_buffer_mut<'a>(&self, bitmap: &'a mut BitmapHandle) -> &'a mut [u8] {

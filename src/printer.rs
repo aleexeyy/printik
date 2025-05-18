@@ -171,7 +171,7 @@ impl PdfImageInserter {
         }
 
         #[cfg(target_os = "macos")]
-        if let Err(e) = print_document_macos() {
+        if let Err(e) = print_document_macos(save_doc_path) {
             eprintln!("Error printing on MacOS: {}", e);
             return Err(e);
         }
