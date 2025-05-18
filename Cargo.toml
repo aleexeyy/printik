@@ -1,13 +1,22 @@
 [package]
 name = "photo_qt"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 build = "build.rs"
 
+[package.metadata.bundle]
+name = "PhotoQT"
+identifier = "io.github.aleexeyy.photoqtWindows"
+icon = ["bug.png"]
+version = "1.0.1"
+osx_frameworks =["pdfium.dll", "pdfium.dll.lib", "libpdfium.dylib"]
+category = "Utility"
+short_description = "A utility application for photography"
+
 [dependencies]
-eframe = "0.27"
-egui_extras = { version = "0.27", features = ["all_loaders"] }
-egui = "0.27"
+eframe = "0.31.1"
+egui_extras = { version = "0.31.1", features = ["all_loaders"] }
+egui = "0.31.1"
 image = { version = "0.25", features = ["jpeg", "png"] }
 notify = "8.0.0"
 rfd = "0.14"
@@ -15,6 +24,9 @@ pdfium-render = "0.8.31"
 dashmap = "5.5.3"
 libc = "0.2"
 lopdf = "0.32.0"
+parking_lot = "0.12"
+static_assertions = "1.1"
+winprint = { version = "0.2.0", features = ["pdfium"] }
 
 [build-dependencies]
 bindgen = "0.71.0"

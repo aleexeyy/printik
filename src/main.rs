@@ -1,25 +1,25 @@
 mod ui;
 mod watcher;
-mod print_job;
-
-mod bindings {
-    #![allow(warnings)]
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
-fn main() -> eframe::Result<()> {
-
+mod printer;
+mod pdfwrap;
+fn main() {
+    if cfg!(target_os = "macos") {
+        println!("Running on MacOS");
+    } else {
+        println!("Running on Windows");
+    }
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([ui::INITIAL_WIDTH, ui::INITIAL_HEIGHT]),
+            .with_inner_size([ui::INITIAL_WIDTH, ui::INITIAL_HEIGHT])
+            .with_resizable(true),
         ..Default::default()
     };
     eframe::run_native(
         "photoQT",
         options,
-        Box::new(|_cc| Box::new(ui::MyApp::new())),
-
-    )
-
+        Box::new(|_cc| {
+            Ok(Box::new(ui::MyApp::new()))
+        }),
+    ).unwrap();
 }

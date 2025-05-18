@@ -1,13 +1,13 @@
 use eframe::egui;
-use image::{RgbaImage, ImageReader, DynamicImage};
-use pdfium_render::prelude::*;
+use image::{Rgba, ImageReader, DynamicImage, ImageBuffer, RgbaImage};
+use std::path::Path;
 use egui::{pos2, Color32, ColorImage, Rect, Vec2, Button, Stroke};
 use std::collections::{HashMap, VecDeque};
 use crate::watcher::FolderWatcher;
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::path::PathBuf;
-use crate::print_job::{PdfImageInserter, InserterCommand};
-
+use crate::printer::PdfImageInserter;
+use crate::pdfwrap::{Library, BitmapFormat, PageOrientation, rendering_flags};
 
 
 const MAX_CACHE_SIZE: usize = 13;
@@ -28,7 +28,7 @@ pub struct MyApp {
     cache_order: VecDeque<String>,
     current_index: usize,
     folder_watcher: FolderWatcher,
-    image_inserter : Option<Sender<InserterCommand>>,
+    image_inserter : Option<Sender<String>>,
     is_testing: bool,
     is_auto_work: bool,
 }
@@ -53,13 +53,13 @@ impl MyApp {
             current_index: 0,
             folder_watcher: folder_watcher,
             image_inserter : None,
-            is_testing: false,
+            is_testing: true,
             is_auto_work: false,
         }
     }
 
     fn load_template_pdf(&mut self, ctx: &egui::Context, pdf_path: &str) {
-        if let Some(image) = render_pdf_page_to_image(pdf_path, 0) {
+        if let Some(image) = render_pdf_page_to_image(pdf_path) {
             self.template_path = Some(pdf_path.to_string());
             let size = [image.width() as usize, image.height() as usize];
             let pixels = image.to_vec();
@@ -94,16 +94,19 @@ impl MyApp {
 
     
 }
+//TODO: implement a check for window focused or minimized and put drawing part there
+//https://github.com/emilk/egui/discussions/995
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let is_focused = ctx.input(|i| i.raw.focused);
         let mut should_repaint = false;
         if self.is_testing {
-            self.load_template_pdf(ctx, "./Берлін 1.pdf");
-            if let Err(e) = self.folder_watcher.spawn_watcher(PathBuf::from("./folder_to_monitor")) {
+            self.load_template_pdf(ctx, "Berlin.pdf");
+            if let Err(e) = self.folder_watcher.spawn_watcher(PathBuf::from("C:\\Users\\User\\Desktop\\photo_qt\\folder_to_monitor")) {
                 eprintln!("Failed to spawn watcher: {:?}", e);
             }
-            self.image_list.push("/Users/alex/Developer/photo_qt/folder_to_monitor/Screenshot 2025-05-10 at 12.15.44.png".to_string());
+            self.image_list.push("C:\\Users\\User\\Desktop\\photo_qt\\folder_to_monitor\\download.jpg".to_string());
             self.update_cache(ctx);
             self.is_testing = false;
             should_repaint = true;
@@ -130,17 +133,13 @@ impl eframe::App for MyApp {
                     let inserter_tx = PdfImageInserter::new_and_spawn(self.template_path.as_ref().expect("No Template is Selected").clone(), x, y, w, h);
                     self.image_inserter = Some(inserter_tx);
                 }
-                let cmd = InserterCommand::Insert {
-                    image_path: path.clone(),
-                    output_path: "./printed_doc.pdf".to_string(),
-                };
-                if let Err(e) = self.image_inserter.as_ref().unwrap().send(cmd) {
+                if let Err(e) = self.image_inserter.as_ref().unwrap().send(path.clone()) {
                     eprintln!("Failed to send print job: {}", e);
                 }
             }
             should_repaint = true;
         }
-
+        if is_focused {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("Layout").clicked() {
@@ -171,11 +170,8 @@ impl eframe::App for MyApp {
                             let inserter_tx = PdfImageInserter::new_and_spawn(temp.clone(), x, y, w, h);
                             self.image_inserter = Some(inserter_tx);
                         }
-                        let cmd = InserterCommand::Insert {
-                            image_path: img.clone(),
-                            output_path: "./printed_doc.pdf".to_string(),
-                        };
-                        if let Err(e) = self.image_inserter.as_ref().unwrap().send(cmd) {
+
+                        if let Err(e) = self.image_inserter.as_ref().unwrap().send(img.clone()) {
                             eprintln!("Failed to send print job: {}", e);
                         }
                         
@@ -288,11 +284,13 @@ impl eframe::App for MyApp {
                 });
             });
         });
-
+    }
         if should_repaint {
+            println!("Repainting!");
             ctx.request_repaint();
+        } else {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
-        ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
 }
 
@@ -312,16 +310,57 @@ fn load_image_from_path(path: &str, ctx: &egui::Context) -> Result<egui::Texture
     Ok(ctx.load_texture(path, color_image, egui::TextureOptions::default()))
 }
 
-fn render_pdf_page_to_image(pdf_path: &str, page_num: usize) -> Option<RgbaImage> {
-    let pdfium = Pdfium::new(
-        Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./")).unwrap()
+fn render_pdf_page_to_image(pdf_path: &str) -> Option<RgbaImage> {
+
+    let library = Library::init_library()?;
+
+    let path = Path::new(pdf_path);
+
+    let document = library.load_document(&path, None).ok()?;
+    let page = library.load_page(&document, 0).ok()?;
+
+    let width = library.get_page_width(&page).round() as usize;
+    let height = library.get_page_height(&page).round() as usize;
+
+    let format = BitmapFormat::BGRA;
+    let stride = width * format.bytes_per_pixel();
+    let mut buffer = vec![0; height * stride]; // Initialize with zeros (black)
+    
+    // Create a bitmap from our buffer
+    let mut bitmap = library
+        .create_bitmap_from_buffer(width, height, format, &mut buffer, stride)
+        .ok()?;
+    let color :u64 = 0xFFFFFFFF;
+    // Fill the bitmap with white background
+    library.bitmap_fill_rect(&mut bitmap, 0, 0, width as i32, height as i32, color);
+    
+    // Render the page to our bitmap
+    library.render_page_to_bitmap(
+        &mut bitmap,
+        &page,
+        0,
+        0,
+        width as i32,
+        height as i32,
+        PageOrientation::Normal,
+        rendering_flags::NORMAL,
     );
-    let document = pdfium.load_pdf_from_file(pdf_path, None).ok()?;
-    let page = document.pages().get(page_num as u16).ok()?;
-    let render_config = PdfRenderConfig::new()
-        .set_target_width(2000)
-        .set_maximum_height(2000);
-    let image = page.render_with_config(&render_config).ok()?.as_image().into_rgba8();
+    
+    // Get access to the raw buffer (in BGRA format)
+    let bgra_data = library.get_bitmap_buffer(&bitmap);
+    
+    // Convert BGRA to RGBA
+    // Note: For every pixel, we need to swap B and R channels
+    let mut rgba_data = Vec::with_capacity(bgra_data.len());
+    for chunk in bgra_data.chunks_exact(4) {
+        rgba_data.push(chunk[2]); // R (was B)
+        rgba_data.push(chunk[1]); // G (stays G)
+        rgba_data.push(chunk[0]); // B (was R)
+        rgba_data.push(chunk[3]); // A (stays A)
+    }
+    
+    // Create ImageBuffer from our RGBA data
+    let image: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width as u32, height as u32, rgba_data).unwrap();
     if image.is_empty() { eprintln!("Failed to render PDF page."); return None; }
     Some(image)
 }
