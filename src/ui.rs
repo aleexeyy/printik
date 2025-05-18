@@ -113,7 +113,6 @@ impl eframe::App for MyApp {
         }
         
 
-        // Drain new image notifications
         while let Ok(path) = self.new_images_rx.try_recv() {
             // eprintln!("New image path received: {}", path);
             self.image_list.push(path.clone());
@@ -139,6 +138,8 @@ impl eframe::App for MyApp {
             }
             should_repaint = true;
         }
+
+
         if is_focused {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -182,16 +183,17 @@ impl eframe::App for MyApp {
         });
 
         if let Some(path) = self.image_list.get(self.current_index).cloned() {
-            if let Some(texture) = self.get_texture(&path) {
-                if self.current_image_path.as_deref() != Some(&path) {
+            if self.current_image_path.as_deref() != Some(&path) {
+                if let Some(texture) = self.get_texture(&path) {
                     self.current_image_texture = Some(texture.clone());
                     self.current_image_path = Some(path.clone());
                     should_repaint = true;
                 }
-            } else if let Ok(img) = load_image_from_path(&path, ctx) {
-                self.current_image_texture = Some(img);
-                self.current_image_path = Some(path.clone());
-                should_repaint = true;
+                else if let Ok(img) = load_image_from_path(&path, ctx) {
+                    self.current_image_texture = Some(img);
+                    self.current_image_path = Some(path.clone());
+                    should_repaint = true;
+                }
             }
         }
 
@@ -205,16 +207,28 @@ impl eframe::App for MyApp {
                 ui.vertical(|ui| {
                     ui.set_width(left_width);
                     ui.set_height(height);
+
+
+    //                     /// Assign a new image to a subregion of the whole texture.
+    // #[allow(clippy::needless_pass_by_ref_mut)] // Intentionally hide interiority of mutability
+    // pub fn set_partial(
+    //     &mut self,
+    //     pos: [usize; 2],
+    //     image: impl Into<ImageData>,
+    //     options: TextureOptions,
+    // ) {
+    //     self.tex_mngr
+    //         .write()
+    //         .set(self.id, ImageDelta::partial(pos, image.into(), options));
+    // }
+
                     if let Some(template) = &self.template_image {
-                        
-                        
+                        //TODO:
+                        //Each frame we create Image::new, can get rid of that
+                        //Can implement ImageLoader for egui 
                         draw_full_image(ui, template);
                     }
                     if let (Some(template), Some(current)) = (&self.template_image, &self.current_image_texture) {
-                        // let x = self.x_coordinate.parse::<f32>().unwrap_or(190.0);
-                        // let y = self.y_coordinate.parse::<f32>().unwrap_or(210.0);
-                        // let w = self.image_width.parse::<f32>().unwrap_or(320.0);
-                        // let h = self.image_height.parse::<f32>().unwrap_or(220.0);
                         
 
                         let aspect_ratio = template.size()[0] as f32 / template.size()[1] as f32;
@@ -288,8 +302,8 @@ impl eframe::App for MyApp {
         if should_repaint {
             println!("Repainting!");
             ctx.request_repaint();
-        } else {
-        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        } else if !is_focused {
+        ctx.request_repaint_after(std::time::Duration::from_millis(200));
         }
     }
 }
@@ -346,11 +360,9 @@ fn render_pdf_page_to_image(pdf_path: &str) -> Option<RgbaImage> {
         rendering_flags::NORMAL,
     );
     
-    // Get access to the raw buffer (in BGRA format)
     let bgra_data = library.get_bitmap_buffer(&bitmap);
     
-    // Convert BGRA to RGBA
-    // Note: For every pixel, we need to swap B and R channels
+
     let mut rgba_data = Vec::with_capacity(bgra_data.len());
     for chunk in bgra_data.chunks_exact(4) {
         rgba_data.push(chunk[2]); // R (was B)
@@ -359,7 +371,6 @@ fn render_pdf_page_to_image(pdf_path: &str) -> Option<RgbaImage> {
         rgba_data.push(chunk[3]); // A (stays A)
     }
     
-    // Create ImageBuffer from our RGBA data
     let image: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width as u32, height as u32, rgba_data).unwrap();
     if image.is_empty() { eprintln!("Failed to render PDF page."); return None; }
     Some(image)

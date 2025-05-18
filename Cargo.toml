@@ -14,9 +14,9 @@ category = "Utility"
 short_description = "A utility application for photography"
 
 [dependencies]
-eframe = "0.31.1"
-egui_extras = { version = "0.31.1", features = ["all_loaders"] }
-egui = "0.31.1"
+eframe = {version = "0.31.1", default-features = false, features = ["glow", "default_fonts"]}
+egui_extras = { version = "0.31.1", features = ["image", "file"] }
+egui = { version = "0.31.1", default-features = false }
 image = { version = "0.25", features = ["jpeg", "png"] }
 notify = "8.0.0"
 rfd = "0.14"
