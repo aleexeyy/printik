@@ -164,6 +164,7 @@ impl PdfImageInserter {
     
 
     fn print(&self, save_doc_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+        println!("Sending printer the document to print: {:?}", save_doc_path);
         #[cfg(target_os = "windows")]
         if let Err(e) = print_document_windows(save_doc_path) {
             eprintln!("Error printing on Windows: {}", e);
