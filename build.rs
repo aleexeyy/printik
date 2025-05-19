@@ -1,13 +1,12 @@
 use std::env;
 use std::path::PathBuf;
-
-extern crate bindgen;
+extern crate windows_exe_info;
 
 fn main() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     
 
-    println!("cargo:rustc-link-search=native=.");
+    println!("cargo:rustc-link-search=native=./");
     println!("cargo:rustc-link-lib=pdfium");
     // println!("cargo:rustc-link-lib=dylib=pdfium");
     println!("cargo:rustc-link-lib=static=pdfium");
@@ -65,6 +64,10 @@ fn main() {
 
     if target_os == "windows" {
         println!("Building for Windows");
+
+        windows_exe_info::icon::icon_ico("./assets/app_icon.ico");
+
+
         
     }
 }
