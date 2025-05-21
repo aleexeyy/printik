@@ -55,7 +55,7 @@ impl MyApp {
             current_index: 0,
             folder_watcher: folder_watcher,
             image_inserter : None,
-            is_testing: true,
+            is_testing: false,
             is_auto_work: false,
         }
     }
@@ -316,7 +316,7 @@ impl eframe::App for MyApp {
             // println!("Repainting!");
             ctx.request_repaint();
         } else if !is_focused {
-        ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
     }
 }
