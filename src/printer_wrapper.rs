@@ -24,7 +24,7 @@ pub struct WindowsPrinter {
 #[cfg(target_os = "windows")]
 impl Printer for WindowsPrinter {
     fn new(printer_name: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut devices = PrinterDevice::all()?; 
+        let devices = PrinterDevice::all()?; 
         let dev = printer_name
             .and_then(|name| devices.iter().find(|d| d.name() == name).cloned())
             .or_else(|| devices.into_iter().next())
@@ -34,9 +34,8 @@ impl Printer for WindowsPrinter {
     }
 
     fn print(&self, file_to_print: &Path) -> Result<(), Box<dyn std::error::Error>> {
-        let file_path = file_to_print.to_string_lossy().as_ref();
         self.printer
-            .print(file_path, Default::default())
+            .print(file_to_print, Default::default())
             .map_err(|e| e.into())
     }
 }
