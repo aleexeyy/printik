@@ -15,6 +15,7 @@ fn main() {
 
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    println!("Out path: {:?}", out_path);
 
         let bindings_pdfium = bindgen::Builder::default()
             .header("wrapper_pdfium.h")
@@ -59,7 +60,7 @@ fn main() {
         
         bindings
             .write_to_file(out_path.join("bindings_cups.rs"))
-            .expect("Couldn't write bindings!");
+            .expect("Couldn't write cups bindings!");
     }
 
     if target_os == "windows" {

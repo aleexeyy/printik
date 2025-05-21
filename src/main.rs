@@ -2,7 +2,7 @@ mod ui;
 mod watcher;
 mod printer;
 mod pdfwrap;
-
+mod printer_wrapper;
 fn main() {
     if cfg!(target_os = "macos") {
         println!("Running on MacOS");

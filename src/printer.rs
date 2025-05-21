@@ -10,15 +10,8 @@ use std::{
 };
 
 
-#[cfg(target_os = "windows")]
-mod printer_windows;
-#[cfg(target_os = "windows")]
-pub use printer_windows::print_document_windows;
+use crate::printer_wrapper::{Printer, make_printer};
 
-#[cfg(target_os = "macos")]
-mod printer_macos;
-#[cfg(target_os = "macos")]
-pub use printer_macos::print_document_macos;
 
 
 fn get_or_create_xobject(
@@ -44,39 +37,49 @@ pub struct PdfImageInserter {
 
 impl PdfImageInserter {
 
-    fn new(template_path: String, x: f32, y: f32, width: f32, height: f32) -> Self {
-            let inserter = PdfImageInserter {
-                template_path: template_path.into(),
-                x,
-                y,
-                width,
-                height, 
-            };
-            inserter
-        }
-
     pub fn save_pdf_path(&self) -> PathBuf {
         env::current_dir().unwrap().join("print_doc.pdf")
     }
-    pub fn new_and_spawn(template_path: String, x: f32, y: f32, width: f32, height: f32) -> Sender<String> {
-            let (tx, rx) : (Sender<String>, Receiver<String>) = mpsc::channel();
-            let inserter = PdfImageInserter::new(template_path, x, y, width, height);
 
+
+    pub fn new_and_spawn(template_path: String, x: f32, y: f32, width: f32, height: f32) -> Result<Sender<String>, Box<dyn Error>> {
+            let (tx, rx) : (Sender<String>, Receiver<String>) = mpsc::channel();
+            // let inserter = PdfImageInserter::new(template_path, x, y, width, height)?;
+            let printer_name = Some("EPSON ET-M1120 Series".to_string());
             thread::spawn(move || { 
+
+                let inserter = PdfImageInserter {
+                    template_path: template_path.clone(),
+                    x,
+                    y,
+                    width,
+                    height,
+                };
+
+                let printer: Box<dyn Printer> = match make_printer(printer_name.as_deref()) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to initialize printer: {}", e);
+                        return;
+                    }
+                };
+
                 for img in rx {
                         let save_pdf_path = inserter.save_pdf_path();
-                        println!("New PDF Path: {:?}", save_pdf_path);
-                        println!("Image Path: {:?}", img);
+
                         if let Err(insert_err) = inserter.insert_image(&img, &save_pdf_path) {
                             eprintln!("Insert error: {}", insert_err);
-                        } else {
-
-                            let _ = inserter.print(&save_pdf_path);
-                            std::fs::remove_file(save_pdf_path).unwrap();
+                            continue;
                         }
-                }
+
+                        if let Err(e) = printer.print(&save_pdf_path) {
+                            eprintln!("Print error for {:?}: {}", save_pdf_path, e);
+                        }
+                        println!("Successfully sumbited a print job!");
+                            // std::fs::remove_file(save_pdf_path).unwrap();
+                    }
             });
-            tx
+            Ok(tx)
         }
     
 
@@ -84,10 +87,10 @@ impl PdfImageInserter {
 
     fn insert_image(&self, image_path: &str, output_path: &PathBuf) -> Result<(), Box<dyn Error>> {
 
-        let mut doc = Document::load(&self.template_path).expect("Can't open the template to print");
+        let mut doc = Document::load(&self.template_path).map_err(|e| format!("Failed to load PDF template: {}", e))?;
 
-        let img = ImageReader::open(image_path).expect("Can't open the image to print")
-        .decode().expect("Can't decode the image to print");
+        let img = ImageReader::open(image_path).map_err(|e| format!("Failed to open image {}: {}", image_path, e))?
+        .decode().map_err(|e| format!("Failed to decode image {}: {}", image_path, e))?;
         let gray_dynamic: DynamicImage = img.grayscale();
         let gray_buf = gray_dynamic.to_luma8();
         let (w_px, h_px) = gray_buf.dimensions();
@@ -158,28 +161,9 @@ impl PdfImageInserter {
             page_dict.set("Contents", new_obj);
         }
         
-        doc.save(&output_path).expect("Cant save the printed document to the output path");
+        doc.save(&output_path).map_err(|e| format!("Failed to save PDF to {:?}: {}", output_path, e))?;
         Ok(())
     }
-    
-
-    fn print(&self, save_doc_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        println!("Sending printer the document to print: {:?}", save_doc_path);
-        #[cfg(target_os = "windows")]
-        if let Err(e) = print_document_windows(save_doc_path) {
-            eprintln!("Error printing on Windows: {}", e);
-            return Err(e);
-        }
-
-        #[cfg(target_os = "macos")]
-        if let Err(e) = print_document_macos(save_doc_path) {
-            eprintln!("Error printing on MacOS: {}", e);
-            return Err(e);
-        }
-
-        Ok(())
-    }
-    
     
 
     

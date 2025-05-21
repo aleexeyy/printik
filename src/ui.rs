@@ -130,7 +130,13 @@ impl eframe::App for MyApp {
                     let w: f32 = self.image_width.parse().unwrap_or(360.0);
                     let h: f32 = self.image_height.parse().unwrap_or(220.0);
                     
-                    let inserter_tx = PdfImageInserter::new_and_spawn(self.template_path.as_ref().expect("No Template is Selected").clone(), x, y, w, h);
+                    let inserter_tx = match PdfImageInserter::new_and_spawn(self.template_path.as_ref().expect("No Template is Selected").clone(), x, y, w, h) {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            eprintln!("Couldn't create an Inserter: {}", e);
+                            return;
+                        }
+                    };
                     self.image_inserter = Some(inserter_tx);
                 }
                 if let Err(e) = self.image_inserter.as_ref().unwrap().send(path.clone()) {
@@ -169,7 +175,13 @@ impl eframe::App for MyApp {
                             let w: f32 = self.image_width.parse().unwrap_or(360.0);
                             let h: f32 = self.image_height.parse().unwrap_or(220.0);
 
-                            let inserter_tx = PdfImageInserter::new_and_spawn(temp.clone(), x, y, w, h);
+                            let inserter_tx = match PdfImageInserter::new_and_spawn(temp.clone(), x, y, w, h) {
+                                Ok(tx) => tx,
+                                Err(e) => {
+                                    eprintln!("Couldn't create an Inserter: {}", e);
+                                    return;
+                                }
+                            };
                             self.image_inserter = Some(inserter_tx);
                         }
 

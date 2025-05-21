@@ -8,15 +8,6 @@ build = "build.rs"
 lto = true
 
 
-[package.metadata.bundle]
-name = "PhotoQT"
-identifier = "io.github.aleexeyy.photoqtWindows"
-icon = ["bug.png"]
-version = "1.0.1"
-osx_frameworks =["pdfium.dll", "pdfium.dll.lib", "libpdfium.dylib"]
-category = "Utility"
-short_description = "A utility application for photography"
-
 [dependencies]
 eframe = {version = "0.31.1", default-features = false, features = ["glow", "default_fonts"]}
 egui_extras = { version = "0.31.1", features = ["image", "file"] }
